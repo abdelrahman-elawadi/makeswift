@@ -1,4 +1,12 @@
-import { ReactElement } from 'react';
+import { LucideIcon } from 'lucide-react';
+import {
+  ComponentPropsWithoutRef,
+  ComponentPropsWithRef,
+  ElementRef,
+  FC,
+  forwardRef,
+  ReactElement,
+} from 'react';
 
 import { cn } from '~/lib/utils';
 
@@ -11,33 +19,42 @@ const roundHalf = (num: number) => {
   return Math.round(num * 2) / 2;
 };
 
-interface Props {
-  className?: string;
-  rating: number;
+type StarIconType = FC<ComponentPropsWithoutRef<'svg'>> | LucideIcon;
+
+interface RatingProps extends ComponentPropsWithRef<'img'> {
+  starEmptyIcon?: StarIconType;
+  starFilledIcon?: StarIconType;
+  starHalfIcon?: StarIconType;
   size?: number;
+  strokeColor?: string;
+  value: number;
 }
 
-const Rating = ({ className, rating, size = 24 }: Props) => {
-  const stars: ReactElement[] = [];
-  const roundedRating = roundHalf(rating);
+export const Rating = forwardRef<ElementRef<'img'>, RatingProps>(
+  ({ className, starFilledIcon, starHalfIcon, starEmptyIcon, size = 24, value, ...props }, ref) => {
+    const stars: ReactElement[] = [];
+    const rating = roundHalf(value);
 
-  for (let i = 1; i <= MAX_RATING; i += 1) {
-    if (roundedRating - i >= 0) {
-      stars.push(<StarFilledIcon height={size} key={i} width={size} />);
-    } else if (roundedRating - i > -1) {
-      stars.push(<StarHalfIcon height={size} key={i} width={size} />);
-    } else {
-      stars.push(<StarEmptyIcon height={size} key={i} width={size} />);
+    const StarHalf = starHalfIcon || StarHalfIcon;
+    const StarEmpty = starEmptyIcon || StarEmptyIcon;
+    const StarFilled = starFilledIcon || StarFilledIcon;
+
+    for (let i = 1; i <= MAX_RATING; i += 1) {
+      if (rating - i >= 0) {
+        stars.push(<StarFilled height={size} key={i} width={size} />);
+      } else if (rating - i > -1) {
+        stars.push(<StarHalf height={size} key={i} width={size} />);
+      } else {
+        stars.push(<StarEmpty height={size} key={i} width={size} />);
+      }
     }
-  }
 
-  return (
-    <span className={cn('inline-flex fill-current', className)} role="img">
-      {stars}
-    </span>
-  );
-};
+    return (
+      <span className={cn('inline-flex fill-current', className)} ref={ref} role="img" {...props}>
+        {stars}
+      </span>
+    );
+  },
+);
 
 Rating.displayName = 'Rating';
-
-export { Rating };

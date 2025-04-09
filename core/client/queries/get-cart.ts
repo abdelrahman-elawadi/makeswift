@@ -1,21 +1,21 @@
 import { cache } from 'react';
 
-import { getSessionCustomerAccessToken } from '~/auth';
+import { getSessionCustomerId } from '~/auth';
 
 import { client } from '..';
 import { graphql } from '../graphql';
 import { TAGS } from '../tags';
 
-const MoneyFieldFragment = graphql(`
-  fragment MoneyFieldFragment on Money {
+const MONEY_FIELDS_FRAGMENT = graphql(`
+  fragment MoneyFields on Money {
     currencyCode
     value
   }
 `);
 
-const GetCartQuery = graphql(
+const GET_CART_QUERY = graphql(
   `
-    query GetCartQuery($cartId: String) {
+    query getCart($cartId: String) {
       site {
         cart(entityId: $cartId) {
           entityId
@@ -32,10 +32,10 @@ const GetCartQuery = graphql(
               productEntityId
               variantEntityId
               extendedListPrice {
-                ...MoneyFieldFragment
+                ...MoneyFields
               }
               extendedSalePrice {
-                ...MoneyFieldFragment
+                ...MoneyFields
               }
               selectedOptions {
                 __typename
@@ -74,10 +74,10 @@ const GetCartQuery = graphql(
               productEntityId
               variantEntityId
               extendedListPrice {
-                ...MoneyFieldFragment
+                ...MoneyFields
               }
               extendedSalePrice {
-                ...MoneyFieldFragment
+                ...MoneyFields
               }
               selectedOptions {
                 __typename
@@ -109,32 +109,31 @@ const GetCartQuery = graphql(
             }
           }
           amount {
-            ...MoneyFieldFragment
+            ...MoneyFields
           }
           discountedAmount {
-            ...MoneyFieldFragment
+            ...MoneyFields
           }
         }
       }
     }
   `,
-  [MoneyFieldFragment],
+  [MONEY_FIELDS_FRAGMENT],
 );
 
-export const getCart = cache(async (cartId?: string, channelId?: string) => {
-  const customerAccessToken = await getSessionCustomerAccessToken();
+export const getCart = cache(async (cartId?: string) => {
+  const customerId = await getSessionCustomerId();
 
   const response = await client.fetch({
-    document: GetCartQuery,
+    document: GET_CART_QUERY,
     variables: { cartId },
-    customerAccessToken,
+    customerId,
     fetchOptions: {
       cache: 'no-store',
       next: {
         tags: [TAGS.cart],
       },
     },
-    channelId,
   });
 
   const cart = response.data.site.cart;

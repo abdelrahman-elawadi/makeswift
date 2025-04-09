@@ -1,26 +1,20 @@
 import { removeEdgesAndNodes } from '@bigcommerce/catalyst-client';
-import { getFormatter } from 'next-intl/server';
 import { cache } from 'react';
 
 import { client } from '~/client';
-import { PaginationFragment } from '~/client/fragments/pagination';
 import { graphql } from '~/client/graphql';
 import { revalidate } from '~/client/revalidate-target';
-import { BlogPostCardFragment } from '~/components/blog-post-card/fragment';
+import { BlogPostCardFragment } from '~/components/blog-post-card';
 
-const BlogQuery = graphql(`
-  query BlogQuery {
-    site {
-      content {
-        blog {
-          name
-          description
-          path
-        }
-      }
-    }
-  }
-`);
+interface BlogPostsFiltersInput {
+  tagId?: string;
+}
+
+interface Pagination {
+  limit?: number;
+  before?: string;
+  after?: string;
+}
 
 const BlogPostsPageQuery = graphql(
   `
@@ -34,6 +28,7 @@ const BlogPostsPageQuery = graphql(
       site {
         content {
           blog {
+            name
             posts(first: $first, after: $after, last: $last, before: $before, filters: $filters) {
               edges {
                 node {
@@ -42,7 +37,10 @@ const BlogPostsPageQuery = graphql(
                 }
               }
               pageInfo {
-                ...PaginationFragment
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
               }
             }
           }
@@ -50,31 +48,12 @@ const BlogPostsPageQuery = graphql(
       }
     }
   `,
-  [BlogPostCardFragment, PaginationFragment],
+  [BlogPostCardFragment],
 );
 
-export interface BlogPostsFiltersInput {
-  tag: string | null;
-}
-
-interface Pagination {
-  limit: number;
-  before: string | null;
-  after: string | null;
-}
-
-export const getBlog = cache(async () => {
-  const response = await client.fetch({
-    document: BlogQuery,
-    fetchOptions: { next: { revalidate } },
-  });
-
-  return response.data.site.content.blog;
-});
-
 export const getBlogPosts = cache(
-  async ({ tag, limit = 9, before, after }: BlogPostsFiltersInput & Pagination) => {
-    const filterArgs = tag ? { filters: { tags: [tag] } } : {};
+  async ({ tagId, limit = 9, before, after }: BlogPostsFiltersInput & Pagination) => {
+    const filterArgs = tagId ? { filters: { tags: [tagId] } } : {};
     const paginationArgs = before ? { last: limit, before } : { first: limit, after };
 
     const response = await client.fetch({
@@ -89,24 +68,12 @@ export const getBlogPosts = cache(
       return null;
     }
 
-    const format = await getFormatter();
-
     return {
-      pageInfo: blog.posts.pageInfo,
-      posts: removeEdgesAndNodes(blog.posts).map((post) => ({
-        id: String(post.entityId),
-        author: post.author,
-        content: post.plainTextSummary,
-        date: format.dateTime(new Date(post.publishedDate.utc)),
-        image: post.thumbnailImage
-          ? {
-              src: post.thumbnailImage.url,
-              alt: post.thumbnailImage.altText,
-            }
-          : undefined,
-        href: post.path,
-        title: post.name,
-      })),
+      ...blog,
+      posts: {
+        pageInfo: blog.posts.pageInfo,
+        items: removeEdgesAndNodes(blog.posts),
+      },
     };
   },
 );

@@ -40,9 +40,8 @@ next-env.d.ts
 
 # generated
 client/generated
+bigcommerce.graphql
+bigcommerce-graphql.d.ts
 
 # secrets
 .catalyst
-
-# Build config
-build-config.json

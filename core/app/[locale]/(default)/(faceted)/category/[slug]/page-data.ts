@@ -1,56 +1,38 @@
 import { cache } from 'react';
 
-import { getSessionCustomerAccessToken } from '~/auth';
+import { getSessionCustomerId } from '~/auth';
 import { client } from '~/client';
 import { graphql, VariablesOf } from '~/client/graphql';
 import { revalidate } from '~/client/revalidate-target';
-import { BreadcrumbsCategoryFragment } from '~/components/breadcrumbs/fragment';
+import { BreadcrumbsFragment } from '~/components/breadcrumbs';
+
+import { CategoryTreeFragment } from './_components/sub-categories';
 
 const CategoryPageQuery = graphql(
   `
     query CategoryPageQuery($categoryId: Int!) {
       site {
         category(entityId: $categoryId) {
-          entityId
           name
           ...BreadcrumbsFragment
-          seo {
-            pageTitle
-            metaDescription
-            metaKeywords
-          }
         }
-        categoryTree(rootEntityId: $categoryId) {
-          entityId
-          name
-          path
-          children {
-            entityId
-            name
-            path
-            children {
-              entityId
-              name
-              path
-            }
-          }
-        }
+        ...CategoryTreeFragment
       }
     }
   `,
-  [BreadcrumbsCategoryFragment],
+  [BreadcrumbsFragment, CategoryTreeFragment],
 );
 
-type Variables = VariablesOf<typeof CategoryPageQuery>;
+type CategoryPageQueryVariables = VariablesOf<typeof CategoryPageQuery>;
 
-export const getCategoryPageData = cache(async (variables: Variables) => {
-  const customerAccessToken = await getSessionCustomerAccessToken();
+export const getCategoryPageData = cache(async (variables: CategoryPageQueryVariables) => {
+  const customerId = await getSessionCustomerId();
 
   const response = await client.fetch({
     document: CategoryPageQuery,
     variables,
-    customerAccessToken,
-    fetchOptions: customerAccessToken ? { cache: 'no-store' } : { next: { revalidate } },
+    customerId,
+    fetchOptions: customerId ? { cache: 'no-store' } : { next: { revalidate } },
   });
 
   return response.data.site;

@@ -9,19 +9,14 @@ const BrandQuery = graphql(`
     site {
       brand(entityId: $entityId) {
         name
-        seo {
-          pageTitle
-          metaDescription
-          metaKeywords
-        }
       }
     }
   }
 `);
 
-type Variables = VariablesOf<typeof BrandQuery>;
+type BrandPageQueryVariables = VariablesOf<typeof BrandQuery>;
 
-export const getBrand = cache(async (variables: Variables) => {
+export const getBrand = cache(async (variables: BrandPageQueryVariables) => {
   const response = await client.fetch({
     document: BrandQuery,
     variables,

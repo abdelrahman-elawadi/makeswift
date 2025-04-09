@@ -1,44 +1,46 @@
 import { Slot } from '@radix-ui/react-slot';
+import { cva } from 'class-variance-authority';
 import { Loader2 as Spinner } from 'lucide-react';
-import { ComponentPropsWithRef, ComponentRef, forwardRef } from 'react';
+import { ComponentPropsWithRef, ElementRef, forwardRef } from 'react';
 
 import { cn } from '~/lib/utils';
 
-interface Props extends ComponentPropsWithRef<'button'> {
+export const buttonVariants = cva(
+  'relative flex w-full justify-center items-center border-2 py-2.5 px-[30px] text-base leading-6 font-semibold border-primary disabled:border-gray-400 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20',
+  {
+    variants: {
+      variant: {
+        primary:
+          'bg-primary text-white hover:bg-secondary hover:border-secondary disabled:bg-gray-400 disabled:hover:bg-gray-400 disabled:hover:border-gray-400',
+        secondary:
+          'bg-transparent text-primary hover:bg-secondary hover:bg-opacity-10 hover:border-secondary hover:text-secondary disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:border-gray-400 disabled:hover:text-gray-400',
+        subtle:
+          'border-none bg-transparent text-primary hover:bg-secondary hover:bg-opacity-10 hover:text-secondary disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400',
+      },
+    },
+    defaultVariants: {
+      variant: 'primary',
+    },
+  },
+);
+
+export interface ButtonProps extends ComponentPropsWithRef<'button'> {
+  variant?: 'primary' | 'secondary' | 'subtle';
   asChild?: boolean;
   loading?: boolean;
   loadingText?: string;
-  variant?: 'primary' | 'secondary' | 'subtle';
 }
 
-const Button = forwardRef<ComponentRef<'button'>, Props>(
+export const Button = forwardRef<ElementRef<'button'>, ButtonProps>(
   (
-    {
-      asChild = false,
-      children,
-      className,
-      variant = 'primary',
-      loading,
-      loadingText,
-      disabled,
-      ...props
-    },
+    { asChild = false, children, className, variant, loading, loadingText, disabled, ...props },
     ref,
   ) => {
     const Comp = asChild ? Slot : 'button';
 
     return (
       <Comp
-        className={cn(
-          'relative flex w-full items-center justify-center border-2 border-primary px-[30px] py-2.5 text-base font-semibold leading-6 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 disabled:border-gray-400',
-          variant === 'primary' &&
-            'hover:border-secondary hover:bg-secondary bg-primary text-white disabled:bg-gray-400 disabled:hover:border-gray-400 disabled:hover:bg-gray-400',
-          variant === 'secondary' &&
-            'hover:border-secondary hover:bg-secondary hover:text-secondary bg-transparent text-primary hover:bg-opacity-10 disabled:text-gray-400 disabled:hover:border-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400',
-          variant === 'subtle' &&
-            'hover:bg-secondary hover:text-secondary border-none bg-transparent text-primary hover:bg-opacity-10 disabled:text-gray-400 disabled:hover:bg-transparent disabled:hover:text-gray-400',
-          className,
-        )}
+        className={cn(buttonVariants({ variant, className }))}
         disabled={disabled || loading}
         ref={ref}
         {...props}
@@ -49,7 +51,7 @@ const Button = forwardRef<ComponentRef<'button'>, Props>(
               <Spinner aria-hidden="true" className="animate-spin" />
               <span className="sr-only">{loadingText}</span>
             </span>
-            <span className="invisible flex items-center">{children}</span>
+            <span className={cn('invisible flex items-center')}>{children}</span>
           </>
         ) : (
           children
@@ -60,5 +62,3 @@ const Button = forwardRef<ComponentRef<'button'>, Props>(
 );
 
 Button.displayName = 'Button';
-
-export { Button };

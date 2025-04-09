@@ -1,99 +1,75 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { SearchParams } from 'nuqs';
-import { createSearchParamsCache, parseAsInteger, parseAsString } from 'nuqs/server';
 
-import { FeaturedBlogPostList } from '@/vibes/soul/sections/featured-blog-post-list';
-import { defaultPageInfo, pageInfoTransformer } from '~/data-transformers/page-info-transformer';
+import { BlogPostCard } from '~/components/blog-post-card';
+import { Link } from '~/components/link';
+import { LocaleType } from '~/i18n';
 
-import { getBlog, getBlogPosts } from './page-data';
+import { getBlogPosts } from './page-data';
 
 interface Props {
-  params: Promise<{ locale: string }>;
-  searchParams: Promise<SearchParams>;
+  params: { locale: LocaleType };
+  searchParams: Record<string, string | string[] | undefined>;
 }
 
-const defaultPostLimit = 9;
+export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
+  const blogPosts = await getBlogPosts(searchParams);
 
-const searchParamsCache = createSearchParamsCache({
-  tag: parseAsString,
-  before: parseAsString,
-  after: parseAsString,
-  limit: parseAsInteger.withDefault(defaultPostLimit),
-});
-
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations('Blog');
-  const blog = await getBlog();
+  const title = blogPosts?.name ?? 'Blog';
 
   return {
-    title: blog?.name ?? t('title'),
-    description:
-      blog?.description && blog.description.length > 150
-        ? `${blog.description.substring(0, 150)}...`
-        : blog?.description,
+    title,
   };
 }
 
-async function listBlogPosts(searchParamsPromise: Promise<SearchParams>) {
-  const searchParamsParsed = searchParamsCache.parse(await searchParamsPromise);
-  const blogPosts = await getBlogPosts(searchParamsParsed);
-  const posts = blogPosts?.posts ?? [];
+export default async function BlogPostPage({ params: { locale }, searchParams }: Props) {
+  const blogPosts = await getBlogPosts(searchParams);
+  const t = await getTranslations({ locale, namespace: 'Pagination' });
 
-  return posts;
-}
-
-async function getEmptyStateTitle(): Promise<string | null> {
-  const t = await getTranslations('Blog.Empty');
-
-  return t('title');
-}
-
-async function getEmptyStateSubtitle(): Promise<string | null> {
-  const t = await getTranslations('Blog.Empty');
-
-  return t('subtitle');
-}
-
-async function getPaginationInfo(searchParamsPromise: Promise<SearchParams>) {
-  const searchParamsParsed = searchParamsCache.parse(await searchParamsPromise);
-  const blogPosts = await getBlogPosts(searchParamsParsed);
-
-  return pageInfoTransformer(blogPosts?.pageInfo ?? defaultPageInfo);
-}
-
-export default async function Blog(props: Props) {
-  const searchParamsParsed = searchParamsCache.parse(await props.searchParams);
-  const { tag } = searchParamsParsed;
-  const blog = await getBlog();
-
-  if (!blog) {
+  if (!blogPosts) {
     return notFound();
   }
 
-  const tagCrumb = tag ? [{ label: tag, href: '#' }] : [];
-
   return (
-    <FeaturedBlogPostList
-      breadcrumbs={[
-        {
-          label: 'Home',
-          href: '/',
-        },
-        {
-          label: blog.name,
-          href: tag ? blog.path : '#',
-        },
-        ...tagCrumb,
-      ]}
-      description={blog.description}
-      emptyStateSubtitle={getEmptyStateSubtitle()}
-      emptyStateTitle={getEmptyStateTitle()}
-      paginationInfo={getPaginationInfo(props.searchParams)}
-      placeholderCount={6}
-      posts={listBlogPosts(props.searchParams)}
-      title={blog.name}
-    />
+    <div className="mx-auto max-w-screen-xl">
+      <h1 className="mb-8 text-3xl font-black lg:text-5xl">{blogPosts.name}</h1>
+
+      <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
+        {blogPosts.posts.items.map((post) => {
+          return <BlogPostCard data={post} key={post.entityId} />;
+        })}
+      </div>
+
+      <nav aria-label="Pagination" className="mb-12 mt-10 flex justify-center text-primary">
+        {blogPosts.posts.pageInfo.hasPreviousPage ? (
+          <Link
+            className="focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+            href={`/blog?before=${String(blogPosts.posts.pageInfo.startCursor)}`}
+            scroll={false}
+          >
+            <span className="sr-only">{t('prev')}</span>
+            <ChevronLeft aria-hidden="true" className="inline-block h-8 w-8" />
+          </Link>
+        ) : (
+          <ChevronLeft aria-hidden="true" className="inline-block h-8 w-8 text-gray-200" />
+        )}
+        {blogPosts.posts.pageInfo.hasNextPage ? (
+          <Link
+            className="focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
+            href={`/blog?after=${String(blogPosts.posts.pageInfo.endCursor)}`}
+            scroll={false}
+          >
+            <span className="sr-only">{t('next')}</span>
+            <ChevronRight aria-hidden="true" className="inline-block h-8 w-8" />
+          </Link>
+        ) : (
+          <ChevronRight aria-hidden="true" className="inline-block h-8 w-8 text-gray-200" />
+        )}
+      </nav>
+    </div>
   );
 }
+
+export const runtime = 'edge';
