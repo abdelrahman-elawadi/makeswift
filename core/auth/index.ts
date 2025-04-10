@@ -2,12 +2,14 @@ import { decodeJwt } from 'jose';
 import NextAuth, { type DefaultSession, type NextAuthConfig, User } from 'next-auth';
 import 'next-auth/jwt';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import { getTranslations } from 'next-intl/server';
 import { z } from 'zod';
 
 import { client } from '~/client';
-import { getCartId } from '~/lib/cart';
 import { b2bClient } from '~/client/b2b-client';
 import { graphql } from '~/client/graphql';
+import { clearCartId, getCartId, setCartId } from '~/lib/cart';
+import { serverToast } from '~/lib/server-toast';
 
 const LoginMutation = graphql(`
   mutation LoginMutation($email: String!, $password: String!, $cartEntityId: String) {
@@ -21,6 +23,9 @@ const LoginMutation = graphql(`
         firstName
         lastName
         email
+      }
+      cart {
+        entityId
       }
     }
   }
@@ -38,6 +43,9 @@ const LoginWithTokenMutation = graphql(`
         firstName
         lastName
         email
+      }
+      cart {
+        entityId
       }
     }
   }
@@ -64,6 +72,22 @@ const JwtCredentials = z.object({
 
 export const Credentials = z.discriminatedUnion('type', [PasswordCredentials, JwtCredentials]);
 
+async function handleLoginCart(guestCartId?: string, loginResultCartId?: string) {
+  const t = await getTranslations('Cart');
+
+  if (guestCartId === undefined && loginResultCartId !== undefined) {
+    await serverToast.info(t('cartRestored'), { position: 'top-center' });
+  }
+
+  if (loginResultCartId && guestCartId && loginResultCartId !== guestCartId) {
+    await serverToast.info(t('cartCombined'), { position: 'top-center' });
+  }
+
+  if (loginResultCartId) {
+    await setCartId(loginResultCartId);
+  }
+}
+
 async function loginWithPassword(
   email: string,
   password: string,
@@ -86,6 +110,8 @@ async function loginWithPassword(
   if (!result.customer || !result.customerAccessToken) {
     return null;
   }
+
+  await handleLoginCart(cartEntityId, result.cart?.entityId);
 
   return {
     name: `${result.customer.firstName} ${result.customer.lastName}`,
@@ -123,6 +149,8 @@ async function loginWithJwt(jwt: string, cartEntityId?: string): Promise<User | 
     return null;
   }
 
+  await handleLoginCart(cartEntityId, result.cart?.entityId);
+
   return {
     name: `${result.customer.firstName} ${result.customer.lastName}`,
     email: result.customer.email,
@@ -159,6 +187,16 @@ async function authorize(credentials: unknown): Promise<User | null> {
   }
 }
 
+const partitionedCookie = (name?: string) =>
+  ({
+    ...(name !== undefined ? { name } : {}),
+    options: {
+      partitioned: true,
+      secure: true,
+      sameSite: 'none',
+    },
+  }) as const;
+
 const config = {
   session: {
     strategy: 'jwt',
@@ -166,6 +204,7 @@ const config = {
   pages: {
     signIn: '/login',
   },
+  trustHost: true,
   callbacks: {
     jwt: ({ token, user }) => {
       // user can actually be undefined
@@ -211,6 +250,8 @@ const config = {
               cache: 'no-store',
             },
           });
+
+          await clearCartId();
         } catch (error) {
           // eslint-disable-next-line no-console
           console.error(error);
@@ -229,6 +270,16 @@ const config = {
       authorize,
     }),
   ],
+  // configure NextAuth cookies to work inside of the Makeswift Builder's canvas
+  cookies: {
+    sessionToken: partitionedCookie(),
+    callbackUrl: partitionedCookie(),
+    csrfToken: partitionedCookie(),
+    pkceCodeVerifier: partitionedCookie(),
+    state: partitionedCookie(),
+    nonce: partitionedCookie(),
+    webauthnChallenge: partitionedCookie(),
+  },
 } satisfies NextAuthConfig;
 
 const { handlers, auth, signIn: nextAuthSignIn, signOut } = NextAuth(config);

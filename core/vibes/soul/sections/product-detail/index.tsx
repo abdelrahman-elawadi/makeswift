@@ -110,7 +110,7 @@ export function ProductDetail<F extends Field>({
 
                   <Stream
                     fallback={<ProductDetailFormSkeleton />}
-                    value={Promise.all([
+                    value={Streamable.all([
                       streamableFields,
                       streamableCtaLabel,
                       streamableCtaDisabled,
@@ -134,9 +134,8 @@ export function ProductDetail<F extends Field>({
 
                   <Stream fallback={<ProductDescriptionSkeleton />} value={product.description}>
                     {(description) =>
-                      description !== null &&
-                      description !== undefined && (
-                        <div className="border-t border-contrast-100 py-8 text-contrast-500">
+                      description != null && (
+                        <div className="prose prose-sm border-t border-contrast-100 py-8">
                           {description}
                         </div>
                       )
@@ -290,7 +289,7 @@ function ProductAccordionsSkeleton() {
   );
 }
 
-function ProductDetailSkeleton() {
+export function ProductDetailSkeleton() {
   return (
     <div className="grid animate-pulse grid-cols-1 items-stretch gap-x-6 gap-y-8 @2xl:grid-cols-2 @5xl:gap-x-12">
       <div className="hidden @2xl:block">

@@ -2,8 +2,17 @@
 
 import { PropsWithChildren } from 'react';
 
-import { CompareProductsProvider } from '~/app/contexts/compare-products-context';
+import { Toaster } from '@/vibes/soul/primitives/toaster';
+import { CartProvider } from '~/components/header/cart-provider';
+import { CompareDrawerProvider } from '~/components/ui/compare-drawer';
 
 export function Providers({ children }: PropsWithChildren) {
-  return <CompareProductsProvider>{children}</CompareProductsProvider>;
+  return (
+    <>
+      <Toaster position="top-right" />
+      <CartProvider>
+        <CompareDrawerProvider>{children}</CompareDrawerProvider>
+      </CartProvider>
+    </>
+  );
 }

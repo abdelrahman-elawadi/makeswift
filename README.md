@@ -1,3 +1,6 @@
+⚠️ **IMPORTANT:** As of January 6, 2025, the `main` branch is frozen. The default branch is now `canary`. Please make sure to work with and submit PRs to the `canary` branch.
+
+
 <a href="https://catalyst.dev" target="_blank" rel="noopener norerrer">
   <img src="https://storage.googleapis.com/bigcommerce-developers/images/catalyst_readme_banner.png" alt="Catalyst for Composable Commerce Image Banner" title="Catalyst">
 </a>
@@ -20,6 +23,10 @@ our [React](https://react.dev/) storefront components, and is backed by the
 By choosing Catalyst, you'll have a fully-functional storefront within a few seconds, and spend zero time on wiring
 up APIs or building SEO, Accessibility, and Performance-optimized ecommerce components you've probably written many
 times before. You can instead go straight to work building your brand and making this your own.
+
+## Demo
+
+- [Catalyst Demo](https://catalyst-demo.site)
 
 ![-----------------------------------------------------](https://storage.googleapis.com/bigcommerce-developers/images/catalyst_readme_hr.png)
 

@@ -1,28 +1,23 @@
 import { removeEdgesAndNodes } from '@bigcommerce/catalyst-client';
-import { ShoppingCart } from 'lucide-react';
-import { NextIntlClientProvider } from 'next-intl';
-import { getLocale, getMessages, getTranslations } from 'next-intl/server';
+import { getFormatter, getTranslations } from 'next-intl/server';
 
+import { CarouselProduct } from '@/vibes/soul/primitives/products-carousel';
+import { FeaturedProductsCarousel } from '@/vibes/soul/sections/featured-products-carousel';
+import { NotFound as NotFoundSection } from '@/vibes/soul/sections/not-found';
 import { client } from '~/client';
 import { graphql } from '~/client/graphql';
 import { revalidate } from '~/client/revalidate-target';
-import { Footer, FooterFragment } from '~/components/footer/footer';
-import { Header, HeaderFragment } from '~/components/header';
-import { CartLink } from '~/components/header/cart';
-import { ProductCard, ProductCardFragment } from '~/components/product-card';
-import { SearchForm } from '~/components/search-form';
-
-export const metadata = {
-  title: 'Not Found',
-};
+import { Footer } from '~/components/footer';
+import { Header } from '~/components/header';
+import { ProductCardFragment } from '~/components/product-card/fragment';
+import { productCardTransformer } from '~/data-transformers/product-card-transformer';
+import { getPreferredCurrencyCode } from '~/lib/currency';
 
 const NotFoundQuery = graphql(
   `
-    query NotFoundQuery {
+    query NotFoundQuery($currencyCode: currencyCode) {
       site {
-        ...HeaderFragment
-        ...FooterFragment
-        featuredProducts(first: 4) {
+        featuredProducts(first: 10) {
           edges {
             node {
               ...ProductCardFragment
@@ -32,66 +27,35 @@ const NotFoundQuery = graphql(
       }
     }
   `,
-  [HeaderFragment, FooterFragment, ProductCardFragment],
+  [ProductCardFragment],
 );
 
-export default async function NotFound() {
-  const locale = await getLocale();
-  const t = await getTranslations('NotFound');
-  const messages = await getMessages({ locale });
-
+async function getFeaturedProducts(): Promise<CarouselProduct[]> {
+  const format = await getFormatter();
+  const currencyCode = await getPreferredCurrencyCode();
   const { data } = await client.fetch({
     document: NotFoundQuery,
+    variables: { currencyCode },
     fetchOptions: { next: { revalidate } },
   });
 
   const featuredProducts = removeEdgesAndNodes(data.site.featuredProducts);
 
+  return productCardTransformer(featuredProducts, format);
+}
+
+export default async function NotFound() {
+  const t = await getTranslations('NotFound');
+
   return (
     <>
-      <Header
-        cart={
-          <CartLink>
-            <ShoppingCart aria-label="cart" />
-          </CartLink>
-        }
-        data={data.site}
-      />
+      <Header />
 
-      <main className="mx-auto mb-10 max-w-[835px] space-y-8 px-4 sm:px-10 lg:px-0">
-        <div className="flex flex-col gap-8 px-0 py-16">
-          <h2 className="text-4xl font-black lg:text-5xl">{t('heading')}</h2>
-          <p className="text-lg">{t('message')}</p>
-        </div>
-        <NextIntlClientProvider locale={locale} messages={{ NotFound: messages.NotFound ?? {} }}>
-          <SearchForm />
-        </NextIntlClientProvider>
-        {featuredProducts.length ? (
-          <section>
-            <h3 className="mb-8 text-3xl font-black lg:text-4xl">{t('featuredProducts')}</h3>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-8 md:grid-cols-4">
-              {featuredProducts.map((product) => (
-                <NextIntlClientProvider
-                  key={product.entityId}
-                  locale={locale}
-                  messages={{ Product: messages.Product ?? {} }}
-                >
-                  <ProductCard
-                    product={product}
-                    showCart={false}
-                    showCompare={false}
-                    showReviews={false}
-                  />
-                </NextIntlClientProvider>
-              ))}
-            </div>
-          </section>
-        ) : null}
-      </main>
+      <NotFoundSection subtitle={t('message')} title={t('heading')} />
 
-      <Footer data={data.site} />
+      <FeaturedProductsCarousel products={getFeaturedProducts()} />
+
+      <Footer />
     </>
   );
 }
-
-export const runtime = 'edge';

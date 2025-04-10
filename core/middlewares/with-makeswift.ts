@@ -1,66 +1,38 @@
-import { NextRequest } from 'next/server';
-import { parse as parseSetCookie } from 'set-cookie-parser';
+import { unstable_createMakeswiftDraftRequest } from '@makeswift/runtime/next/middleware';
+
+import { routing } from '~/i18n/routing';
 
 import { MiddlewareFactory } from './compose-middlewares';
 
+if (!process.env.MAKESWIFT_SITE_API_KEY) {
+  throw new Error('MAKESWIFT_SITE_API_KEY is not set');
+}
+
+const MAKESWIFT_SITE_API_KEY = process.env.MAKESWIFT_SITE_API_KEY;
+
+const localeCookieName = ({ localeCookie }: { localeCookie?: boolean | { name?: string } }) =>
+  (typeof localeCookie === 'object' ? localeCookie.name : undefined) ?? 'NEXT_LOCALE';
+
 export const withMakeswift: MiddlewareFactory = (middleware) => {
   return async (request, event) => {
-    /**
-     * Check if the incoming request URL has a secret attached to it
-     *
-     * @todo either by query param _or_ URL?
-     */
-    const apiKey = request.nextUrl.searchParams.get('x-makeswift-draft-mode');
+    const draftRequest = await unstable_createMakeswiftDraftRequest(
+      request,
+      MAKESWIFT_SITE_API_KEY,
+    );
 
-    /**
-     * Check that the secret matches the given Makeswift API key
-     */
-    if (apiKey === process.env.MAKESWIFT_SITE_API_KEY) {
-      /**
-       * If it does, initiate a fetch request to an API endpoint. This endpoint
-       * simply enables draft mode and then returns the response. We can also
-       * attach other data to this response via cookies/headers as well
-       */
-      const response = await fetch(new URL('/api/makeswift/draft-mode', request.nextUrl.origin), {
-        headers: {
-          'x-makeswift-api-key': apiKey,
-        },
-      });
-
-      /**
-       * If the request to enable draft mode is successful, it will have the
-       * `__prerender_bypass` value in its `Set-Cookie` header. We can extract
-       * this value and attach it to the incoming request.
-       */
-      const cookies = parseSetCookie(response.headers.get('set-cookie') || '');
-      const prerenderBypassValue = cookies.find((c) => c.name === '__prerender_bypass')?.value;
-
-      /**
-       * If the `__prerender_bypass` cookie is not found, continue to the next
-       * middleware without modifying the request
-       */
-      if (!prerenderBypassValue) {
-        return middleware(request, event);
+    if (draftRequest != null) {
+      if (routing.localeCookie) {
+        // If the i18n middleware is configured to use a cookie, it will first try to derive the
+        // locale from the existing request cookie before attempting to match the URL against the
+        // locale routes. The locale switcher in the Makeswift Builder expects the host to always
+        // determine the locale from the URL, though, so we have to erase the cookie from the
+        // proxied request to force that behavior.
+        draftRequest.cookies.delete(localeCookieName(routing));
       }
 
-      const proxiedRequest = new NextRequest(request);
-
-      proxiedRequest.cookies.set('__prerender_bypass', prerenderBypassValue);
-      proxiedRequest.cookies.set(
-        'x-makeswift-draft-data',
-        JSON.stringify({ makeswift: true, siteVersion: 'Working' }),
-      );
-
-      /**
-       * Continue to the next middleware with the modified request
-       */
-      return middleware(proxiedRequest, event);
+      return middleware(draftRequest, event);
     }
 
-    /**
-     * If incoming request URL does not have a secret attached to it,
-     * continue to the next middleware without modifying the request
-     */
     return middleware(request, event);
   };
 };

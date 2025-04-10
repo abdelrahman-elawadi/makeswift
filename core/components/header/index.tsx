@@ -1,185 +1,161 @@
-import { ShoppingCart, User } from 'lucide-react';
-import { ReactNode, Suspense } from 'react';
+import { getLocale, getTranslations } from 'next-intl/server';
+import PLazy from 'p-lazy';
+import { cache } from 'react';
 
-import { getSessionCustomerId } from '~/auth';
-import { FragmentOf, graphql } from '~/client/graphql';
-import { Link } from '~/components/link';
-import { Button } from '~/components/ui/button';
-import {
-  NavigationMenu,
-  NavigationMenuCollapsed,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuToggle,
-} from '~/components/ui/navigation-menu';
+import { LayoutQuery } from '~/app/[locale]/(default)/query';
+import { getSessionCustomerAccessToken } from '~/auth';
+import { client } from '~/client';
+import { graphql, readFragment } from '~/client/graphql';
+import { revalidate } from '~/client/revalidate-target';
+import { TAGS } from '~/client/tags';
+import { logoTransformer } from '~/data-transformers/logo-transformer';
+import { routing } from '~/i18n/routing';
+import { getCartId } from '~/lib/cart';
+import { getPreferredCurrencyCode } from '~/lib/currency';
+import { SiteHeader as HeaderSection } from '~/lib/makeswift/components/site-header/site-header';
 
-import { QuickSearch } from '../quick-search';
-import { StoreLogo, StoreLogoFragment } from '../store-logo';
+import { search } from './_actions/search';
+import { switchCurrency } from './_actions/switch-currency';
+import { HeaderFragment } from './fragment';
 
-import { logout } from './_actions/logout';
-import { CartLink } from './cart';
-import { HeaderNav, HeaderNavFragment } from './header-nav';
-
-export const HeaderFragment = graphql(
-  `
-    fragment HeaderFragment on Site {
-      settings {
-        ...StoreLogoFragment
+const GetCartCountQuery = graphql(`
+  query GetCartCountQuery($cartId: String) {
+    site {
+      cart(entityId: $cartId) {
+        entityId
+        lineItems {
+          totalQuantity
+        }
       }
-      ...HeaderNavFragment
     }
-  `,
-  [StoreLogoFragment, HeaderNavFragment],
-);
+  }
+`);
 
-interface Props {
-  cart: ReactNode;
-  data: FragmentOf<typeof HeaderFragment>;
-}
+const getLayoutData = cache(async () => {
+  const customerAccessToken = await getSessionCustomerAccessToken();
 
-export const Header = async ({ cart, data }: Props) => {
-  const customerId = await getSessionCustomerId();
+  const { data: response } = await client.fetch({
+    document: LayoutQuery,
+    customerAccessToken,
+    fetchOptions: customerAccessToken ? { cache: 'no-store' } : { next: { revalidate } },
+  });
+
+  return readFragment(HeaderFragment, response).site;
+});
+
+const getLinks = async () => {
+  const data = await getLayoutData();
+
+  /**  To prevent the navigation menu from overflowing, we limit the number of categories to 6.
+   To show a full list of categories, modify the `slice` method to remove the limit.
+   Will require modification of navigation menu styles to accommodate the additional categories.
+   */
+  const categoryTree = data.categoryTree.slice(0, 6);
+
+  return categoryTree.map(({ name, path, children }) => ({
+    label: name,
+    href: path,
+    groups: children.map((firstChild) => ({
+      label: firstChild.name,
+      href: firstChild.path,
+      links: firstChild.children.map((secondChild) => ({
+        label: secondChild.name,
+        href: secondChild.path,
+      })),
+    })),
+  }));
+};
+
+const getLogo = async () => {
+  const data = await getLayoutData();
+
+  return data.settings ? logoTransformer(data.settings) : '';
+};
+
+const getCartCount = async () => {
+  const cartId = await getCartId();
+
+  if (!cartId) {
+    return null;
+  }
+
+  const customerAccessToken = await getSessionCustomerAccessToken();
+
+  const response = await client.fetch({
+    document: GetCartCountQuery,
+    variables: { cartId },
+    customerAccessToken,
+    fetchOptions: {
+      cache: 'no-store',
+      next: {
+        tags: [TAGS.cart],
+      },
+    },
+  });
+
+  if (!response.data.site.cart) {
+    return null;
+  }
+
+  return response.data.site.cart.lineItems.totalQuantity;
+};
+
+const getCurrencies = async () => {
+  const data = await getLayoutData();
+
+  if (!data.currencies.edges) {
+    return [];
+  }
+
+  const currencies = data.currencies.edges
+    // only show transactional currencies for now until cart prices can be rendered in display currencies
+    .filter(({ node }) => node.isTransactional)
+    .map(({ node }) => ({
+      id: node.code,
+      label: node.code,
+      isDefault: node.isDefault,
+    }));
+
+  return currencies;
+};
+
+export const Header = async () => {
+  const t = await getTranslations('Components.Header');
+  const locale = await getLocale();
+  const currencyCode = await getPreferredCurrencyCode();
+
+  const locales = routing.locales.map((enabledLocales) => ({
+    id: enabledLocales,
+    label: enabledLocales.toLocaleUpperCase(),
+  }));
+
+  const currencies = await getCurrencies();
+  const defaultCurrency = currencies.find(({ isDefault }) => isDefault);
+  const activeCurrencyId = currencyCode ?? defaultCurrency?.id;
 
   return (
-    <header>
-      <NavigationMenu>
-        {data.settings && (
-          <NavigationMenuLink
-            asChild
-            className="flex-1 overflow-hidden text-ellipsis px-0 xl:flex-none"
-          >
-            <Link href="/">
-              <StoreLogo data={data.settings} />
-            </Link>
-          </NavigationMenuLink>
-        )}
-
-        <HeaderNav className="hidden xl:flex" data={data.categoryTree} />
-
-        <div className="flex">
-          <NavigationMenuList className="h-full">
-            {data.settings && (
-              <NavigationMenuItem className="hidden sm:block">
-                <QuickSearch>
-                  <Link className="flex" href="/">
-                    <StoreLogo data={data.settings} />
-                  </Link>
-                </QuickSearch>
-              </NavigationMenuItem>
-            )}
-            <NavigationMenuItem className={`hidden xl:flex ${customerId ? 'self-stretch' : ''}`}>
-              {customerId ? (
-                <div className="group/account flex cursor-pointer items-center">
-                  <Link
-                    aria-label="Account"
-                    className="p-3 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
-                    href="/account"
-                  >
-                    <User aria-hidden="true" />
-                  </Link>
-
-                  <ul className="absolute -right-12 top-full z-10 hidden cursor-default bg-white p-6 pb-8 shadow-md group-hover/account:block [&>li]:mb-2">
-                    <li>
-                      <Link
-                        className="whitespace-nowrap font-semibold focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20"
-                        href="/account"
-                      >
-                        My account
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        className="whitespace-nowrap focus-visible:outline-none focus-visible:ring-4"
-                        href="/account/orders"
-                      >
-                        Orders
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        className="whitespace-nowrap focus-visible:outline-none focus-visible:ring-4"
-                        href="/account/messages"
-                      >
-                        Messages
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        className="whitespace-nowrap focus-visible:outline-none focus-visible:ring-4"
-                        href="/account/addresses"
-                      >
-                        Addresses
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        className="whitespace-nowrap focus-visible:outline-none focus-visible:ring-4"
-                        href="/account/wishlists"
-                      >
-                        Wish lists
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        className="whitespace-nowrap focus-visible:outline-none focus-visible:ring-4"
-                        href="/account/recently-viewed"
-                      >
-                        Recently viewed
-                      </Link>
-                    </li>
-                    <li>
-                      <Link
-                        className="whitespace-nowrap focus-visible:outline-none focus-visible:ring-4"
-                        href="/account/settings"
-                      >
-                        Account Settings
-                      </Link>
-                    </li>
-                    <li>
-                      <form action={logout}>
-                        <Button
-                          className="justify-start p-0 font-normal text-black hover:bg-transparent hover:text-black"
-                          type="submit"
-                          variant="subtle"
-                        >
-                          Log out
-                        </Button>
-                      </form>
-                    </li>
-                  </ul>
-                </div>
-              ) : (
-                <NavigationMenuLink asChild>
-                  <Link aria-label="Login" href="/login">
-                    <User />
-                  </Link>
-                </NavigationMenuLink>
-              )}
-            </NavigationMenuItem>
-            <NavigationMenuItem>
-              <p role="status">
-                <Suspense
-                  fallback={
-                    <CartLink>
-                      <ShoppingCart aria-label="cart" />
-                    </CartLink>
-                  }
-                >
-                  {cart}
-                </Suspense>
-              </p>
-            </NavigationMenuItem>
-            <NavigationMenuItem>
-              <NavigationMenuToggle className="xl:hidden" />
-            </NavigationMenuItem>
-          </NavigationMenuList>
-        </div>
-
-        <NavigationMenuCollapsed>
-          <HeaderNav data={data.categoryTree} inCollapsedNav />
-        </NavigationMenuCollapsed>
-      </NavigationMenu>
-    </header>
+    <HeaderSection
+      navigation={{
+        accountHref: '/login',
+        accountLabel: t('Icons.account'),
+        cartHref: '/cart',
+        cartLabel: t('Icons.cart'),
+        searchHref: '/search',
+        searchLabel: t('Icons.search'),
+        searchParamName: 'term',
+        searchAction: search,
+        links: getLinks(),
+        logo: getLogo(),
+        mobileMenuTriggerLabel: t('toggleNavigation'),
+        openSearchPopupLabel: t('Search.openSearchPopup'),
+        logoLabel: t('home'),
+        cartCount: PLazy.from(getCartCount),
+        activeLocaleId: locale,
+        locales,
+        currencies,
+        activeCurrencyId,
+        currencyAction: switchCurrency,
+      }}
+    />
   );
 };

@@ -1,12 +1,4 @@
 {
-  "include": [
-    "next-env.d.ts",
-    "**/*.cjs",
-    "**/*.mjs",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
   "compilerOptions": {
     "target": "esnext",
     "lib": [
@@ -46,12 +38,21 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "~/*": [
-        "./*"
-      ]
+      "@/vibes/*": ["./vibes/*"],
+      "~/*": ["./*"]
     },
     "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo.json"
   },
+  "include": [
+    "next-env.d.ts",
+    "playwright.config.ts",
+    "**/*.cjs",
+    "**/*.mjs",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "tests/**/*"
+  ],
   "exclude": [
     "node_modules",
     ".next"

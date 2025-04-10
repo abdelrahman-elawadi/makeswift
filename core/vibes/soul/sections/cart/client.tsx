@@ -12,6 +12,7 @@ import { toast } from '@/vibes/soul/primitives/toaster';
 import { StickySidebarLayout } from '@/vibes/soul/sections/sticky-sidebar-layout';
 import { Image } from '~/components/image';
 
+import { CouponCodeForm, CouponCodeFormState } from './coupon-code-form';
 import { cartLineItemActionFormDataSchema } from './schema';
 
 import { CartEmptyState } from '.';
@@ -47,6 +48,16 @@ export interface Cart<LineItem extends CartLineItem> {
   totalLabel?: string;
 }
 
+interface CouponCode {
+  action: Action<CouponCodeFormState, FormData>;
+  couponCodes?: string[];
+  ctaLabel?: string;
+  disabled?: boolean;
+  label?: string;
+  placeholder?: string;
+  removeLabel?: string;
+}
+
 export interface Props<LineItem extends CartLineItem> {
   title?: string;
   summaryTitle?: string;
@@ -58,6 +69,7 @@ export interface Props<LineItem extends CartLineItem> {
   decrementLineItemLabel?: string;
   incrementLineItemLabel?: string;
   cart: Cart<LineItem>;
+  couponCode?: CouponCode;
 }
 
 const defaultEmptyState = {
@@ -69,6 +81,7 @@ const defaultEmptyState = {
 export function CartClient<LineItem extends CartLineItem>({
   title,
   cart,
+  couponCode,
   decrementLineItemLabel,
   incrementLineItemLabel,
   deleteLineItemLabel,
@@ -152,6 +165,18 @@ export function CartClient<LineItem extends CartLineItem>({
                 </div>
               ))}
             </div>
+
+            {couponCode && (
+              <CouponCodeForm
+                action={couponCode.action}
+                couponCodes={couponCode.couponCodes}
+                ctaLabel={couponCode.ctaLabel}
+                disabled={couponCode.disabled}
+                label={couponCode.label}
+                placeholder={couponCode.placeholder}
+                removeLabel={couponCode.removeLabel}
+              />
+            )}
 
             <div className="flex justify-between border-t border-contrast-100 py-6 text-xl font-bold">
               <dt>{cart.totalLabel ?? 'Total'}</dt>
@@ -323,11 +348,15 @@ function CheckoutButton({
 >) {
   const [lastResult, formAction] = useActionState(action, null);
 
+  const [form] = useForm({ lastResult });
+
   useEffect(() => {
-    if (lastResult?.error) {
-      console.log(lastResult.error);
+    if (form.errors) {
+      form.errors.forEach((error) => {
+        toast.error(error);
+      });
     }
-  }, [lastResult?.error]);
+  }, [form.errors]);
 
   return (
     <form action={formAction}>
